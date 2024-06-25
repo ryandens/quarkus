@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.inject.Provider;
+
 import org.jboss.logging.Logger;
 
 import io.quarkus.oidc.AuthorizationCodeTokens;
@@ -48,7 +50,7 @@ public class OidcProviderClient implements Closeable {
     private final Vertx vertx;
     private final OidcConfigurationMetadata metadata;
     private final OidcTenantConfig oidcConfig;
-    private final String clientSecretBasicAuthScheme;
+    private final Provider<String> clientSecretBasicAuthScheme;
     private final String introspectionBasicAuthScheme;
     private final Key clientJwtKey;
     private final Map<OidcEndpoint.Type, List<OidcRequestFilter>> filters;
@@ -63,7 +65,7 @@ public class OidcProviderClient implements Closeable {
         this.vertx = vertx;
         this.metadata = metadata;
         this.oidcConfig = oidcConfig;
-        this.clientSecretBasicAuthScheme = OidcCommonUtils.initClientSecretBasicAuth(oidcConfig);
+        this.clientSecretBasicAuthScheme = () -> OidcCommonUtils.initClientSecretBasicAuth(oidcConfig);
         this.clientJwtKey = OidcCommonUtils.initClientJwtKey(oidcConfig);
         this.introspectionBasicAuthScheme = initIntrospectionBasicAuthScheme(oidcConfig);
         this.filters = filters;
@@ -161,7 +163,7 @@ public class OidcProviderClient implements Closeable {
                     formBody.set(OidcConstants.CLIENT_ID, oidcConfig.clientId.get());
                 }
             } else if (clientSecretBasicAuthScheme != null) {
-                request.putHeader(AUTHORIZATION_HEADER, clientSecretBasicAuthScheme);
+                request.putHeader(AUTHORIZATION_HEADER, clientSecretBasicAuthScheme.get());
             } else if (clientJwtKey != null) {
                 String jwt = OidcCommonUtils.signJwtWithKey(oidcConfig, metadata.getTokenUri(), clientJwtKey);
                 if (OidcCommonUtils.isClientSecretPostJwtAuthRequired(oidcConfig.credentials)) {

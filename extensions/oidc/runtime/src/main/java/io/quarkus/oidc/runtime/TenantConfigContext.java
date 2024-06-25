@@ -10,6 +10,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import jakarta.inject.Provider;
+
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.ClientProxy;
@@ -44,7 +46,7 @@ public class TenantConfigContext {
     /**
      * Token Encryption Secret Key
      */
-    private final SecretKey tokenEncSecretKey;
+    private final Provider<SecretKey> tokenEncSecretKey;
 
     final boolean ready;
 
@@ -60,7 +62,8 @@ public class TenantConfigContext {
 
         boolean isService = OidcUtils.isServiceApp(config);
         stateSecretKey = !isService && provider != null && provider.client != null ? createStateSecretKey(config) : null;
-        tokenEncSecretKey = !isService && provider != null && provider.client != null ? createTokenEncSecretKey(config) : null;
+        tokenEncSecretKey = !isService && provider != null && provider.client != null ? () -> createTokenEncSecretKey(config)
+                : () -> null;
     }
 
     private static SecretKey createStateSecretKey(OidcTenantConfig config) {
@@ -187,7 +190,7 @@ public class TenantConfigContext {
     }
 
     public SecretKey getTokenEncSecretKey() {
-        return tokenEncSecretKey;
+        return tokenEncSecretKey.get();
     }
 
     private static Map<Redirect.Location, List<OidcRedirectFilter>> getRedirectFiltersMap(List<OidcRedirectFilter> filters) {
