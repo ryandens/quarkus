@@ -19,10 +19,11 @@ import javax.inject.Inject;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.artifacts.Configuration;
-import org.gradle.api.artifacts.ModuleVersionIdentifier;
-import org.gradle.api.artifacts.ResolvedArtifact;
-import org.gradle.api.tasks.Classpath;
+import org.gradle.api.artifacts.ArtifactCollection;
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.result.ResolvedArtifactResult;
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition;
+import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskAction;
 
@@ -54,7 +55,7 @@ import io.quarkus.maven.dependency.GACT;
 public class ExtensionDescriptorTask extends DefaultTask {
 
     private final QuarkusExtensionConfiguration quarkusExtensionConfiguration;
-    private final Configuration classpath;
+    private final ArtifactCollection artifactCollection;
     private final File outputResourcesDir;
     private final String inputResourcesDir;
 
@@ -65,8 +66,7 @@ public class ExtensionDescriptorTask extends DefaultTask {
     private final Map<String, String> projectInfo;
 
     @Inject
-    public ExtensionDescriptorTask(QuarkusExtensionConfiguration quarkusExtensionConfiguration, SourceSet mainSourceSet,
-            Configuration runtimeClasspath) {
+    public ExtensionDescriptorTask(QuarkusExtensionConfiguration quarkusExtensionConfiguration, SourceSet mainSourceSet, final ArtifactCollection artifactCollection) {
 
         setDescription("Generate extension descriptor file");
         setGroup("quarkus");
@@ -74,7 +74,7 @@ public class ExtensionDescriptorTask extends DefaultTask {
         this.quarkusExtensionConfiguration = quarkusExtensionConfiguration;
         this.outputResourcesDir = mainSourceSet.getOutput().getResourcesDir();
         this.inputResourcesDir = mainSourceSet.getResources().getSourceDirectories().getAsPath();
-        this.classpath = runtimeClasspath;
+        this.artifactCollection = artifactCollection;
 
         // Calling this method tells Gradle that it should not fail the build. Side effect is that the configuration
         // cache will be at least degraded, but the build will not fail.
@@ -89,9 +89,9 @@ public class ExtensionDescriptorTask extends DefaultTask {
         projectInfo.put("version", getProject().getVersion().toString());
     }
 
-    @Classpath
-    public Configuration getClasspath() {
-        return classpath;
+    @Input
+    public ArtifactCollection getArtifactCollection() {
+        return artifactCollection;
     }
 
     @TaskAction
@@ -368,9 +368,10 @@ public class ExtensionDescriptorTask extends DefaultTask {
 
     private void computeQuarkusExtensions(ObjectNode extObject) {
         ObjectNode metadataNode = getMetadataNode(extObject);
-        Set<ResolvedArtifact> extensions = new HashSet<>();
-        for (ResolvedArtifact resolvedArtifact : getClasspath().getResolvedConfiguration().getResolvedArtifacts()) {
-            if (resolvedArtifact.getExtension().equals("jar")) {
+        Set<ResolvedArtifactResult> extensions = new HashSet<>();
+
+        for (ResolvedArtifactResult resolvedArtifact : artifactCollection.getResolvedArtifacts().get()) {
+            if (ArtifactTypeDefinition.JAR_TYPE.equals(resolvedArtifact.getVariant().getAttributes().getAttribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE))) {
                 Path p = resolvedArtifact.getFile().toPath();
                 if (Files.isDirectory(p) && isExtension(p)) {
                     extensions.add(resolvedArtifact);
@@ -386,19 +387,23 @@ public class ExtensionDescriptorTask extends DefaultTask {
             }
         }
         ArrayNode extensionArray = metadataNode.putArray("extension-dependencies");
-        for (ResolvedArtifact extension : extensions) {
-            ModuleVersionIdentifier id = extension.getModuleVersion().getId();
-            extensionArray
-                    .add(new AppArtifactKey(id.getGroup(), id.getName(), extension.getClassifier(), extension.getExtension())
-                            .toGacString());
+        for (ResolvedArtifactResult extension : extensions) {
+            if (!(extension.getId().getComponentIdentifier() instanceof ModuleComponentIdentifier moduleComponentIdentifier)) {
+                throw new IllegalArgumentException("Unexpected component identifier type: " + extension.getId().getComponentIdentifier().getClass());
+            }
+            extensionArray.add(new AppArtifactKey(moduleComponentIdentifier.getGroup(), moduleComponentIdentifier.getModule(), null, ArtifactTypeDefinition.JAR_TYPE).toGacString());
+
         }
     }
 
     private String getQuarkusCoreVersionOrNull() {
-        for (ResolvedArtifact resolvedArtifact : getClasspath().getResolvedConfiguration().getResolvedArtifacts()) {
-            ModuleVersionIdentifier artifactId = resolvedArtifact.getModuleVersion().getId();
-            if (artifactId.getGroup().equals("io.quarkus") && artifactId.getName().equals("quarkus-core")) {
-                return artifactId.getVersion();
+        for (ResolvedArtifactResult resolvedArtifact : artifactCollection.getResolvedArtifacts().get()) {
+            if (!(resolvedArtifact.getId().getComponentIdentifier() instanceof ModuleComponentIdentifier moduleComponentIdentifier)) {
+                throw new IllegalArgumentException("Unexpected component identifier type: " + resolvedArtifact.getId().getComponentIdentifier().getClass());
+            }
+
+            if (moduleComponentIdentifier.getGroup().equals("io.quarkus") && moduleComponentIdentifier.getModule().equals("quarkus-core")) {
+                return moduleComponentIdentifier.getVersion();
             }
         }
         return null;

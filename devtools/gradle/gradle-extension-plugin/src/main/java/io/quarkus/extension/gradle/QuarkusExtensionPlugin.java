@@ -60,7 +60,7 @@ public class QuarkusExtensionPlugin implements Plugin<Project> {
                 ValidateExtensionTask.class, quarkusExt, runtimeModuleClasspath);
 
         TaskProvider<ExtensionDescriptorTask> extensionDescriptorTask = tasks.register(EXTENSION_DESCRIPTOR_TASK_NAME,
-                ExtensionDescriptorTask.class, quarkusExt, mainSourceSet, runtimeModuleClasspath);
+                ExtensionDescriptorTask.class, quarkusExt, mainSourceSet, runtimeModuleClasspath.getIncoming().getArtifacts());
 
         extensionDescriptorTask.configure(task -> task.dependsOn(validateExtensionTask));
 
