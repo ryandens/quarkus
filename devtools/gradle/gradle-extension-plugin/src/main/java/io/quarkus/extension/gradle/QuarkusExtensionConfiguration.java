@@ -27,10 +27,8 @@ public class QuarkusExtensionConfiguration {
     private RemovedResources removedResources = new RemovedResources();
     private Capabilities capabilities = new Capabilities();
 
-    private Project project;
-
+    private final String defaultDeploymentArtifactName;
     public QuarkusExtensionConfiguration(Project project) {
-        this.project = project;
         disableValidation = project.getObjects().property(Boolean.class);
         disableValidation.convention(false);
         deploymentArtifact = project.getObjects().property(String.class);
@@ -44,6 +42,13 @@ public class QuarkusExtensionConfiguration {
         conditionalDependencies = project.getObjects().listProperty(String.class);
         conditionalDevDependencies = project.getObjects().listProperty(String.class);
         dependencyCondition = project.getObjects().listProperty(String.class);
+
+        String projectName = project.getName();
+        if (project.getParent() != null && projectName.equals("runtime")) {
+            projectName = project.getParent().getName();
+        }
+        defaultDeploymentArtifactName = String.format("%s:%s-deployment:%s", project.getGroup(), projectName,
+                project.getVersion());
     }
 
     public void setDisableValidation(boolean disableValidation) {
@@ -147,12 +152,7 @@ public class QuarkusExtensionConfiguration {
     }
 
     public String getDefaultDeployementArtifactName() {
-        String projectName = project.getName();
-        if (project.getParent() != null && projectName.equals("runtime")) {
-            projectName = project.getParent().getName();
-        }
-        return String.format("%s:%s-deployment:%s", project.getGroup(), projectName,
-                project.getVersion());
+       return defaultDeploymentArtifactName;
     }
 
 }
